@@ -1,0 +1,21 @@
+[project]
+name = "functions"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "asyncio>=3.4.3",
+    "firebase-admin>=6.6.0",
+    "firebase-functions>=0.4.2",
+    "pandas>=2.2.3",
+    "prophet>=1.1.6",
+    "python-dotenv>=1.0.1",
+    "websocket>=0.2.1",
+    "websockets>=14.1",
+]
+
+[dependency-groups]
+dev = [
+    "ipython>=8.30.0",
+]

@@ -1,0 +1,30 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "functions": {
+    "source": "functions",
+    "ignore": [
+      "**/.venv/**",
+      "**/venv/**",
+      "**/serviceAccountKey.json",
+      "**/firebase.json",
+      "**/node_modules/**"
+    ]
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  }
+}

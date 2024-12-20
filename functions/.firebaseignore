@@ -1,0 +1,6 @@
+.venv
+venv
+node_modules
+firebase-debug.log
+serviceAccountKey.json
+*.lock

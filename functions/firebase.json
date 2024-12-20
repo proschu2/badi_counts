@@ -1,0 +1,13 @@
+{
+  "functions": {
+    "source": ".",
+    "ignore": [
+      ".venv/**",
+      "venv/**",
+      "serviceAccountKey.json",
+      "firebase.json",
+      "**/node_modules/**"
+    ],
+    "entryPoint": "main.scheduled_fetch_freespace"
+  }
+}
