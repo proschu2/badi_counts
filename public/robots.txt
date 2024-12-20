@@ -1,0 +1,5 @@
+
+User-agent: *
+Allow: /
+
+Sitemap: https://badi.sanziomonti.com/sitemap.xml
