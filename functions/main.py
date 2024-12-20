@@ -108,16 +108,42 @@ def train_time_series_model(data):
     try:
         logging.info("Training time series model...")
         model = Prophet(
-            weekly_seasonality=True,  # Enable weekly patterns
-            daily_seasonality=True,  # Enable daily patterns
-            yearly_seasonality=False,  # Disable yearly patterns as we don't have enough data
-            seasonality_mode="multiplicative",  # Use multiplicative seasonality for percentage data
+            n_changepoints=30,
+            daily_seasonality=False,  # Disable default daily seasonality
+            weekly_seasonality=True,
+            changepoint_prior_scale=0.1,
+            seasonality_mode="multiplicative"
         )
-
-        # Add Swiss holidays as special days
+        
+        # Add Swiss holidays
         model.add_country_holidays(country_name="CH")
-
-        # Fit the model
+        
+        # Add custom daily seasonality with 4 main periods
+        model.add_seasonality(
+            name='daily_periods',
+            period=1,  # 1 day
+            fourier_order=5,  # Higher order to capture more complex patterns
+            condition_name=None
+        )
+        
+        # Add time-of-day segments as additional regressors
+        times = pd.DataFrame({'ds': data['ds']})
+        hour = times['ds'].dt.hour
+        
+        # Early morning period (6-11)
+        times['morning'] = ((hour >= 6) & (hour < 11)).astype(int)
+        # Lunch period (11-13)
+        times['lunch'] = ((hour >= 11) & (hour < 13)).astype(int)
+        # Afternoon period (13-16)
+        times['afternoon'] = ((hour >= 13) & (hour < 16)).astype(int)
+        # Evening period (16-22)
+        times['evening'] = ((hour >= 16) & (hour < 22)).astype(int)
+        
+        # Add the time periods to the model
+        for period in ['morning', 'lunch', 'afternoon', 'evening']:
+            model.add_regressor(period)
+            data[period] = times[period]
+        
         model.fit(data)
         logging.info("Model trained successfully.")
         return model
@@ -152,14 +178,20 @@ def make_predictions(model, days=5):
                 pd.date_range(start=day_start, end=day_end, freq="30min")
             )
 
-        # Filter to keep only XX:30 timestamps
-        # future_dates = future_dates[future_dates.minute == 30]
+        # Create future DataFrame
         future = pd.DataFrame({"ds": future_dates})
+        
+        # Add time period regressors
+        hour = future['ds'].dt.hour
+        future['morning'] = ((hour >= 6) & (hour < 11)).astype(int)
+        future['lunch'] = ((hour >= 11) & (hour < 13)).astype(int)
+        future['afternoon'] = ((hour >= 13) & (hour < 16)).astype(int)
+        future['evening'] = ((hour >= 16) & (hour < 22)).astype(int)
 
         forecast = model.predict(future)
         logging.info("Predictions made successfully.")
 
-        # Clip the predicted values to the range 0-100%
+        # Clip the predicted values
         forecast["yhat"] = forecast["yhat"].clip(lower=0, upper=100)
         forecast["yhat_lower"] = forecast["yhat_lower"].clip(lower=0, upper=100)
         forecast["yhat_upper"] = forecast["yhat_upper"].clip(lower=0, upper=100)
@@ -173,25 +205,82 @@ def make_predictions(model, days=5):
 def store_predictions(forecast):
     try:
         logging.info("Storing predictions in Firestore...")
-        collection_ref = (
+
+        # Group predictions by day
+        forecasts_by_day = {}
+        for _, row in forecast.iterrows():
+            day = row["ds"].strftime("%Y-%m-%d")
+            hour = row["ds"].hour
+            
+            # Determine time period
+            time_period = None
+            if 6 <= hour < 11:
+                time_period = "morning"
+            elif 11 <= hour < 13:
+                time_period = "lunch"
+            elif 13 <= hour < 16:
+                time_period = "afternoon"
+            elif 16 <= hour < 22:
+                time_period = "evening"
+            
+            if day not in forecasts_by_day:
+                forecasts_by_day[day] = {
+                    "predictions": [],
+                    "periods": {
+                        "morning": {"value": 0, "count": 0},
+                        "lunch": {"value": 0, "count": 0},
+                        "afternoon": {"value": 0, "count": 0},
+                        "evening": {"value": 0, "count": 0}
+                    }
+                }
+
+            # Add to main predictions list
+            forecasts_by_day[day]["predictions"].append({
+                "timestamp": row["ds"],
+                "predicted_freespace_percentage": float(row["yhat"]),
+                "lower_bound": float(row["yhat_lower"]),
+                "upper_bound": float(row["yhat_upper"]),
+                "time_period": time_period
+            })
+            
+            # Accumulate values for time period averages
+            if time_period:
+                forecasts_by_day[day]["periods"][time_period]["value"] += float(row["yhat"])
+                forecasts_by_day[day]["periods"][time_period]["count"] += 1
+
+        # Calculate averages and prepare final data
+        predictions_ref = (
             db.collection("freespace_data")
             .document("Hallenbad_City")
             .collection("predictions")
         )
-        for _, row in forecast.iterrows():
-            # Use the timestamp as the document ID
-            doc_id = row["ds"].isoformat()
-            doc_ref = collection_ref.document(doc_id)
-            doc_ref.set(
-                {
-                    "timestamp": row["ds"],
-                    "predicted_freespace_percentage": row["yhat"],
-                    "lower_bound": row["yhat_lower"],
-                    "upper_bound": row["yhat_upper"],
-                },
-                merge=True,
-            )
-        logging.info("Predictions stored successfully.")
+
+        for day, data in forecasts_by_day.items():
+            # Calculate final average for each period
+            period_predictions = {}
+            for period, values in data["periods"].items():
+                if values["count"] > 0:
+                    period_predictions[period] = {
+                        "predicted_freespace_percentage": round(values["value"] / values["count"], 1),
+                        "period": period
+                    }
+                else:
+                    period_predictions[period] = {
+                        "predicted_freespace_percentage": 0,
+                        "period": period
+                    }
+
+            # Sort the main predictions list
+            data["predictions"] = sorted(data["predictions"], key=lambda x: x["timestamp"])
+            
+            # Store in Firestore
+            predictions_ref.document(day).set({
+                "last_updated": datetime.utcnow(),
+                "predictions": data["predictions"],
+                "periods": period_predictions
+            })
+
+        logging.info(f"Stored predictions for {len(forecasts_by_day)} days")
     except Exception as e:
         logging.error(f"Error storing predictions in Firestore: {e}")
 
