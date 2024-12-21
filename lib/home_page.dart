@@ -306,22 +306,18 @@ class _HomePageState extends State<HomePage> {
           elevation: 0,
           title: const Text('Hallenbad City - Live Capacity'),
           actions: [
-            IconButton(
-              // Option 1: Timeline/Graph icon
-              // Option 2: Trending icon
-              // icon: const Icon(Icons.trending_up),
-              // Option 3: Calendar with stats
-              icon: const Icon(Icons.calendar_view_week),
-              // Option 4: Insights icon
-              // icon: const Icon(Icons.insights),
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                      builder: (context) => const PredictionsPage()),
-                );
-              },
-              tooltip: 'View Predictions',
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: IconButton(
+                icon: const Icon(Icons.insights),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const PredictionsPage()),
+                  );
+                },
+                tooltip: 'View Predictions',
+              ),
             ),
           ],
         ),

@@ -104,9 +104,12 @@ class _PredictionsContentState extends State<PredictionsContent> {
           elevation: 0,
           title: const Text('Occupancy Predictions'),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: _refreshData,
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: IconButton(
+                icon: const Icon(Icons.refresh),
+                onPressed: _refreshData,
+              ),
             ),
           ],
         ),
