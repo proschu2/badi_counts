@@ -1,14 +1,10 @@
 {
   "hosting": {
     "public": "build/web",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
-    ],
+    "ignore": ["firebase.json", "**/node_modules/**"],
     "headers": [
       {
-        "source": "/favicon.ico",
+        "source": "**/*.@(jpg|jpeg|gif|png|ico|svg)",
         "headers": [
           {
             "key": "Cache-Control",
@@ -17,12 +13,21 @@
         ]
       }
     ],
+    "cleanUrls": true,
+    "trailingSlash": false,
     "rewrites": [
       {
         "source": "**",
         "destination": "/index.html"
       }
     ]
+    // "frameworksBackend": {
+    //   "region": "us-central1"
+    // }
+  },
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "config": {
     "flutter": {
@@ -45,5 +50,35 @@
         }
       }
     }
-  }
+  },
+  "emulators": {
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "hosting": {
+      "port": 5000,
+      "host": "localhost"
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4000
+    },
+    "singleProjectMode": true
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "ignore": [
+        "**/.venv/**",
+        "**/venv/**",
+        "serviceAccountKey.json",
+        "firebase.json",
+        "**/node_modules/**"
+      ],
+      "entryPoint": "main.scheduled_fetch_freespace"
+    }
+  ]
 }

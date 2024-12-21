@@ -2,18 +2,19 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isServiceAccount() {
+      return request.auth.token.firebase.sign_in_provider == 'google.com'
+      && request.auth.token.email.matches('.*@badi-counts-zh.iam.gserviceaccount.com');
+    }
 
-    // This rule allows anyone with your Firestore database reference to view, edit,
-    // and delete all data in your Firestore database. It is useful for getting
-    // started, but it is configured to expire after 30 days because it
-    // leaves your app open to attackers. At that time, all client
-    // requests to your Firestore database will be denied.
-    //
-    // Make sure to write security rules for your app before that time, or else
-    // all client requests to your Firestore database will be denied until you Update
-    // your rules
+    function isLocalDevelopment() {
+      return request.origin.matches('http://localhost:[0-9]+') ||
+             request.origin.matches('http://127.0.0.1:[0-9]+');
+    }
+
     match /{document=**} {
-      allow read, write: if request.time < timestamp.date(2025, 1, 18);
+      allow read: if true;
+      allow write: if isServiceAccount() || isLocalDevelopment();
     }
   }
 }

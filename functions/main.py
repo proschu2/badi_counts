@@ -36,15 +36,22 @@ def store_in_firestore(total_capacity: int, usage: int, freespace: int):
         logging.info("Storing data in Firestore...")
         # Cap the total capacity at 200
         total_capacity = min(total_capacity, 200)
-        # Create a new document in the historical_data subcollection with an auto-generated ID
-        collection_ref = (
+
+        # Use timezone-aware datetime
+        timestamp = datetime.now(ZoneInfo("Europe/Zurich"))
+        # Create document ID in format: YYYY-MM-DD-HH-mm-ss
+        doc_id = timestamp.strftime("%Y-%m-%d-%H-%M-%S")
+
+        # Get reference to the document with timestamp-based ID
+        doc_ref = (
             db.collection("freespace_data")
             .document("Hallenbad_City")
             .collection("historical_data")
+            .document(doc_id)
         )
-        # Use timezone-aware datetime
-        timestamp = datetime.now(ZoneInfo("Europe/Zurich"))
-        collection_ref.add(
+
+        # Set the document data
+        doc_ref.set(
             {
                 "total_capacity": int(total_capacity),
                 "usage": int(usage),
@@ -55,7 +62,8 @@ def store_in_firestore(total_capacity: int, usage: int, freespace: int):
                 "timestamp": timestamp,
             }
         )
-        logging.info("Data stored successfully.")
+
+        logging.info(f"Data stored successfully with ID: {doc_id}")
     except Exception as e:
         logging.error(f"Error storing data in Firestore: {e}")
 
@@ -119,9 +127,9 @@ def train_time_series_model(data):
     try:
         logging.info("Training time series model...")
         data["ds"] = pd.to_datetime(data["ds"]).dt.tz_localize(None)
-        
+
         # Calculate training data size in days
-        days_of_data = (data['ds'].max() - data['ds'].min()).days
+        days_of_data = (data["ds"].max() - data["ds"].min()).days
         logging.info(f"Training with {days_of_data} days of data")
 
         """
@@ -157,13 +165,13 @@ def train_time_series_model(data):
 
         # Current configuration for limited data
         model = Prophet(
-            daily_seasonality=True,     
-            weekly_seasonality=False,    
-            yearly_seasonality=False,    
+            daily_seasonality=True,
+            weekly_seasonality=False,
+            yearly_seasonality=False,
             changepoint_prior_scale=0.05,
-            seasonality_mode="additive",   
-            seasonality_prior_scale=5.0,   
-            holidays_prior_scale=0.1,      
+            seasonality_mode="additive",
+            seasonality_prior_scale=5.0,
+            holidays_prior_scale=0.1,
         )
 
         # Only add holidays if we have more than 3 days of data
@@ -300,7 +308,7 @@ def store_predictions(forecast):
     try:
         logging.info("Storing predictions in Firestore...")
 
-        if (forecast.empty):
+        if forecast.empty:
             logging.warning("Forecast DataFrame is empty. No predictions to store.")
             return
 

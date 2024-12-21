@@ -27,6 +27,7 @@ class MyApp extends StatelessWidget {
       title: 'Hallenbad City - Live Capacity',
       theme: ThemeData(
         useMaterial3: true,
+        fontFamily: 'Noto Sans', // Add this line
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1E3C72),
           brightness: Brightness.dark,
@@ -36,16 +37,19 @@ class MyApp extends StatelessWidget {
             fontSize: 72,
             fontWeight: FontWeight.bold,
             color: Colors.white,
+            fontFamily: 'Noto Sans', // Add this line
           ),
           headlineMedium: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.bold,
             color: Colors.white,
+            fontFamily: 'Noto Sans', // Add this line
           ),
           titleLarge: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
             color: Colors.white,
+            fontFamily: 'Noto Sans', // Add this line
           ),
         ),
       ),
