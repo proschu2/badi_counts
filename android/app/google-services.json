@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1097937205336",
+    "project_id": "badi-counts-zh",
+    "storage_bucket": "badi-counts-zh.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1097937205336:android:f3a66d8338db9f2e42b22d",
+        "android_client_info": {
+          "package_name": "ch.badi.zh.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDj9GQozQXVBMNqx89kR1TJRkEOqj_zAc4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
