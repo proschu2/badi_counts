@@ -151,15 +151,29 @@ class _HomePageState extends State<HomePage> {
 
   Color _getCapacityColor() {
     if (!_isPoolOpen) return Colors.grey.withOpacity(0.2);
-    if (_freePlaces > 50) return Colors.green.withOpacity(0.2);
-    if (_freePlaces > 20) return Colors.yellow.withOpacity(0.2);
-    return Colors.red.withOpacity(0.2);
+    // Use occupancy percentage instead of raw numbers
+    final freeSpacePercentage =
+        (_freePlaces / _totalCapacity * 100).clamp(0.0, 100.0);
+    if (freeSpacePercentage >= 66) return Colors.green.withOpacity(0.2);
+    if (freeSpacePercentage >= 33) return Colors.yellow.withOpacity(0.2);
+    return Colors.red.withOpacity(0.7);
   }
 
   Widget _buildProgressBar() {
     final screenWidth = MediaQuery.of(context).size.width;
     final isLargeScreen = screenWidth > 600;
     final barWidth = isLargeScreen ? 600.0 : screenWidth;
+
+    // Get colors for gradient based on percentage
+    List<Color> getProgressColors() {
+      if (_occupancyPercentage >= 75) {
+        return [Colors.red.shade300, Colors.red];
+      } else if (_occupancyPercentage >= 50) {
+        return [Colors.yellow.shade300, Colors.yellow];
+      } else {
+        return [Colors.green.shade300, Colors.green];
+      }
+    }
 
     return Container(
       width: barWidth,
@@ -177,9 +191,11 @@ class _HomePageState extends State<HomePage> {
             alignment: Alignment.centerLeft,
             widthFactor: (_occupancyPercentage / 100).clamp(0.0, 1.0),
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.green, Colors.yellow, Colors.red],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                  colors: getProgressColors(),
                 ),
               ),
             ),
@@ -273,89 +289,102 @@ class _HomePageState extends State<HomePage> {
     final isLargeScreen = screenWidth > 600;
     final contentWidth = isLargeScreen ? 600.0 : screenWidth;
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text('Hallenbad City - Live Capacity'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.analytics),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const PredictionsPage()),
-              );
-            },
-            tooltip: 'View Predictions',
-          ),
-        ],
-      ),
-      body: Container(
-        width: screenWidth,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1E3C72), Color(0xFF2A5298)],
-          ),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1E3C72), Color(0xFF2A5298)],
         ),
-        child: SafeArea(
-          child: SingleChildScrollView(
-            child: Center(
-              child: SizedBox(
-                width: contentWidth,
-                child: Column(
-                  children: [
-                    if (!_isConnected)
-                      Container(
-                        margin: const EdgeInsets.all(16),
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Flexible(
-                              child: Text('Connection lost. Reconnecting...'),
-                            ),
-                            if (_reconnectAttempts >= maxReconnectAttempts)
-                              TextButton(
-                                onPressed: () {
-                                  _reconnectAttempts = 0;
-                                  _connectWebSocket();
-                                },
-                                child: const Text('Try Again'),
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
+        extendBody: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: const Text('Hallenbad City - Live Capacity'),
+          actions: [
+            IconButton(
+              // Option 1: Timeline/Graph icon
+              // Option 2: Trending icon
+              // icon: const Icon(Icons.trending_up),
+              // Option 3: Calendar with stats
+              icon: const Icon(Icons.calendar_view_week),
+              // Option 4: Insights icon
+              // icon: const Icon(Icons.insights),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                      builder: (context) => const PredictionsPage()),
+                );
+              },
+              tooltip: 'View Predictions',
+            ),
+          ],
+        ),
+        body: Container(
+          width: screenWidth,
+          child: SafeArea(
+            child: SingleChildScrollView(
+              child: Center(
+                child: SizedBox(
+                  width: contentWidth,
+                  child: Column(
+                    children: [
+                      if (!_isConnected)
+                        Container(
+                          margin: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Flexible(
+                                child: Text('Connection lost. Reconnecting...'),
                               ),
-                          ],
+                              if (_reconnectAttempts >= maxReconnectAttempts)
+                                TextButton(
+                                  onPressed: () {
+                                    _reconnectAttempts = 0;
+                                    _connectWebSocket();
+                                  },
+                                  child: const Text('Try Again'),
+                                ),
+                            ],
+                          ),
+                        ),
+                      _buildCapacityCircle(),
+                      _buildProgressBar(),
+                      _buildStatsGrid(context),
+                      Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          _status,
+                          style: Theme.of(context).textTheme.headlineMedium,
+                          textAlign: TextAlign.center,
                         ),
                       ),
-                    _buildCapacityCircle(),
-                    _buildProgressBar(),
-                    _buildStatsGrid(context),
-                    Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Text(
-                        _status,
-                        style: Theme.of(context).textTheme.headlineMedium,
-                        textAlign: TextAlign.center,
+                      // Add time remaining at the bottom
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 24),
+                        child: Text(
+                          _timeRemaining,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontSize: 14,
+                                    color: Colors.white70,
+                                  ),
+                          textAlign: TextAlign.center,
+                        ),
                       ),
-                    ),
-                    // Add time remaining at the bottom
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 24),
-                      child: Text(
-                        _timeRemaining,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontSize: 14,
-                              color: Colors.white70,
-                            ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),

@@ -87,27 +87,30 @@ class _PredictionsContentState extends State<PredictionsContent> {
     final isLargeScreen = screenWidth > 600;
     final contentWidth = isLargeScreen ? 600.0 : screenWidth;
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text('Occupancy Predictions'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _refreshData,
-          ),
-        ],
-      ),
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFF1E3C72), Color(0xFF2A5298)],
-          ),
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF1E3C72), Color(0xFF2A5298)],
         ),
-        child: SafeArea(
+      ),
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        extendBodyBehindAppBar: true,
+        extendBody: true,
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: const Text('Occupancy Predictions'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _refreshData,
+            ),
+          ],
+        ),
+        body: SafeArea(
           child: StreamBuilder<List<QueryDocumentSnapshot>>(
             stream: _streamController.stream,
             initialData: _cachedPredictions,
@@ -192,6 +195,18 @@ class _PredictionsContentState extends State<PredictionsContent> {
 
   Widget _buildPeriodRow(
       String period, double percentage, dynamic predictions) {
+    final now = DateTime.now();
+    final today = DateFormat('yyyy-MM-dd').format(now);
+    final rowDate = predictions.isNotEmpty
+        ? DateFormat('yyyy-MM-dd')
+            .format((predictions[0]['timestamp'] as Timestamp).toDate())
+        : '';
+
+    // Only filter past periods if this row is for today
+    if (rowDate == today && _isPastPeriod(period, now)) {
+      return const SizedBox.shrink();
+    }
+
     // Cast and filter predictions for this period
     final predictionsList = ((predictions as List<dynamic>?)
             ?.map((p) => p as Map<String, dynamic>)
@@ -347,5 +362,20 @@ class _PredictionsContentState extends State<PredictionsContent> {
     if (percentage >= 75) return Colors.green;
     if (percentage >= 50) return Colors.yellow;
     return Colors.red;
+  }
+
+  // Add helper method to check if a period is in the past
+  bool _isPastPeriod(String period, DateTime now) {
+    final periodEndTimes = {
+      'early_morning': 9,
+      'late_morning': 11,
+      'lunch': 13,
+      'afternoon': 16,
+      'after_work': 19,
+      'evening': 22,
+    };
+
+    final endHour = periodEndTimes[period] ?? 0;
+    return now.hour >= endHour;
   }
 }
