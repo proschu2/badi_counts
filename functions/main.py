@@ -8,12 +8,8 @@ import asyncio
 import logging
 import os
 from dotenv import load_dotenv
-import pandas as pd
-from prophet import Prophet
 from zoneinfo import ZoneInfo  # Add this import
-from prophet.diagnostics import cross_validation, performance_metrics
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-import numpy as np
+import time
 
 # Initialize Firebase
 if not firebase_admin._apps:
@@ -69,24 +65,28 @@ def store_in_firestore(total_capacity: int, usage: int, freespace: int):
 
 
 async def websocket_info(uri: str) -> int:
-    try:
-        logging.info("Connecting to WebSocket...")
-        async with websockets.connect(uri) as websocket:
-            await websocket.send("all")
-            message = await websocket.recv()
-            data = json.loads(message)
-            for item in data:
-                if item["name"] == "Hallenbad City":
-                    total_capacity = item["maxspace"]
-                    usage = item["currentfill"]
-                    freespace = item["freespace"]
-                    logging.info(
-                        f"Fetched data - Total Capacity: {total_capacity}, Usage: {usage}, Freespace: {freespace}"
-                    )
-                    store_in_firestore(total_capacity, usage, freespace)
-                    return freespace
-    except Exception as e:
-        logging.error(f"Error fetching data: {e}")
+    for attempt in range(3):
+        try:
+            logging.info(f"Connecting to WebSocket... attempt {attempt + 1}")
+            async with websockets.connect(uri) as websocket:
+                await websocket.send("all")
+                message = await websocket.recv()
+                data = json.loads(message)
+                for item in data:
+                    if item["name"] == "Hallenbad City":
+                        total_capacity = item["maxspace"]
+                        usage = item["currentfill"]
+                        freespace = item["freespace"]
+                        logging.info(
+                            f"Fetched data - Total Capacity: {total_capacity}, Usage: {usage}, Freespace: {freespace}"
+                        )
+                        store_in_firestore(total_capacity, usage, freespace)
+                        return freespace
+        except Exception as e:
+            logging.error(f"Error fetching data (attempt {attempt + 1}): {e}")
+            if attempt < 2:
+                time.sleep(2)  # wait before retry
+    logging.error("All retry attempts failed.")
     return None
 
 
@@ -97,6 +97,7 @@ def fetch_freespace():
 
 
 def fetch_historical_data():
+    import pandas as pd
     try:
         logging.info("Fetching historical data from Firestore...")
         collection_ref = (
@@ -124,6 +125,10 @@ def fetch_historical_data():
 
 
 def train_time_series_model(data):
+    import pandas as pd
+    import numpy as np
+    from prophet import Prophet
+    from prophet.diagnostics import cross_validation, performance_metrics
     try:
         logging.info("Training time series model...")
         data["ds"] = pd.to_datetime(data["ds"]).dt.tz_localize(None)
@@ -216,15 +221,19 @@ def train_time_series_model(data):
         model.fit(data)
 
         # Perform cross-validation
-        try:
-            df_cv = cross_validation(
-                model, initial="2 days", period="3 days", horizon="3 days"
-            )
-            metrics = performance_metrics(df_cv)
-            logging.info(f"Cross-validation metrics: {metrics}")
-        except Exception as e:
-            logging.warning(f"Cross-validation failed: {e}")
-            metrics = None
+        import os
+        if not os.getenv("SKIP_CV"):
+            try:
+                df_cv = cross_validation(
+                    model, initial="2 days", period="3 days", horizon="3 days"
+                )
+                metrics = performance_metrics(df_cv)
+                logging.info(f"Cross-validation metrics: {metrics}")
+            except Exception as e:
+                logging.warning(f"Cross-validation failed: {e}")
+                metrics = None
+        else:
+            logging.info("SKIP_CV enabled. Skipping cross-validation.")
 
         logging.info("Model trained successfully.")
         return model, metrics
@@ -234,6 +243,8 @@ def train_time_series_model(data):
 
 
 def make_predictions(model, days=5):
+    import pandas as pd
+    import numpy as np
     try:
         logging.info("Making predictions...")
         now = pd.Timestamp.now(tz=ZoneInfo("Europe/Zurich"))
@@ -291,6 +302,8 @@ def make_predictions(model, days=5):
 
 
 def evaluate_model(y_true, y_pred):
+    import numpy as np
+    from sklearn.metrics import mean_absolute_error, mean_squared_error
     try:
         metrics = {
             "MAE": mean_absolute_error(y_true, y_pred),
@@ -305,6 +318,7 @@ def evaluate_model(y_true, y_pred):
 
 
 def store_predictions(forecast):
+    import pandas as pd
     try:
         logging.info("Storing predictions in Firestore...")
 
