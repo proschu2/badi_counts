@@ -21,9 +21,6 @@
         "destination": "/index.html"
       }
     ]
-    // "frameworksBackend": {
-    //   "region": "us-central1"
-    // }
   },
   "firestore": {
     "rules": "firestore.rules",
@@ -77,8 +74,7 @@
         "serviceAccountKey.json",
         "firebase.json",
         "**/node_modules/**"
-      ],
-      "entryPoint": "main.scheduled_fetch_freespace"
+      ]
     }
   ]
 }
