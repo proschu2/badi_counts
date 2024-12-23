@@ -27,6 +27,8 @@ class _PredictionsContentState extends State<PredictionsContent> {
   StreamSubscription<QuerySnapshot>? _subscription;
   final _streamController =
       StreamController<List<QueryDocumentSnapshot>>.broadcast();
+  Timer? _cacheTimer;
+  bool _isStreamActive = false;
 
   @override
   void initState() {
@@ -38,10 +40,13 @@ class _PredictionsContentState extends State<PredictionsContent> {
   void dispose() {
     _subscription?.cancel();
     _streamController.close();
+    _cacheTimer?.cancel();
     super.dispose();
   }
 
   void _setupPredictionsStream() {
+    if (_isStreamActive) return;
+
     final query = FirebaseFirestore.instance
         .collection('freespace_data')
         .doc('Hallenbad_City')
@@ -51,12 +56,24 @@ class _PredictionsContentState extends State<PredictionsContent> {
       _lastFetchTime = DateTime.now();
       _cachedPredictions = snapshot.docs;
       _streamController.add(snapshot.docs);
+
+      // Start cache timer
+      _cacheTimer?.cancel();
+      _cacheTimer = Timer(cacheDuration, () {
+        _isStreamActive = false;
+        _subscription?.cancel();
+      });
     });
+
+    _isStreamActive = true;
   }
 
   void _refreshData() {
     _lastFetchTime = null;
     _cachedPredictions = null;
+    _cacheTimer?.cancel();
+    _subscription?.cancel();
+    _isStreamActive = false;
     _setupPredictionsStream();
   }
 
@@ -81,11 +98,27 @@ class _PredictionsContentState extends State<PredictionsContent> {
     return periodNames[period] ?? period;
   }
 
+  DateTime _parseTimestamp(dynamic timestamp) {
+    if (timestamp is Timestamp) {
+      return timestamp.toDate();
+    } else if (timestamp is String) {
+      return DateTime.parse(timestamp);
+    }
+    throw FormatException('Invalid timestamp format: $timestamp');
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isLargeScreen = screenWidth > 600;
     final contentWidth = isLargeScreen ? 600.0 : screenWidth;
+
+    // Check if we need to reactivate the stream
+    if (!_isStreamActive &&
+        (_lastFetchTime == null ||
+            DateTime.now().difference(_lastFetchTime!) >= cacheDuration)) {
+      _setupPredictionsStream();
+    }
 
     return Container(
       decoration: const BoxDecoration(
@@ -175,10 +208,9 @@ class _PredictionsContentState extends State<PredictionsContent> {
                           padding: const EdgeInsets.all(16),
                           child: Column(
                             children: periods.map((period) {
-                              final periodData = (data['periods']
-                                  as Map<String, dynamic>)[period];
-                              final percentage =
-                                  periodData['predicted_freespace_percentage'];
+                              final periodsData = data['periods'] as Map<String, dynamic>?;
+                              final periodData = periodsData?[period] as Map<String, dynamic>?;
+                              final percentage = periodData?['predicted_freespace_percentage'] ?? 0.0;
                               return _buildPeriodRow(period, percentage,
                                   data['predictions'] ?? []);
                             }).toList(),
@@ -202,7 +234,7 @@ class _PredictionsContentState extends State<PredictionsContent> {
     final today = DateFormat('yyyy-MM-dd').format(now);
     final rowDate = predictions.isNotEmpty
         ? DateFormat('yyyy-MM-dd')
-            .format((predictions[0]['timestamp'] as Timestamp).toDate())
+            .format(_parseTimestamp(predictions[0]['timestamp']))
         : '';
 
     // Only filter past periods if this row is for today
@@ -214,7 +246,7 @@ class _PredictionsContentState extends State<PredictionsContent> {
     final predictionsList = ((predictions as List<dynamic>?)
             ?.map((p) => p as Map<String, dynamic>)
             .where((prediction) {
-          final timestamp = (prediction['timestamp'] as Timestamp).toDate();
+          final timestamp = _parseTimestamp(prediction['timestamp']);
           final hour = timestamp.hour;
 
           // Define period time ranges
@@ -231,8 +263,8 @@ class _PredictionsContentState extends State<PredictionsContent> {
         }).toList() ??
         [])
       ..sort((a, b) {
-        final aTime = (a['timestamp'] as Timestamp).toDate();
-        final bTime = (b['timestamp'] as Timestamp).toDate();
+        final aTime = _parseTimestamp(a['timestamp']);
+        final bTime = _parseTimestamp(b['timestamp']);
         return aTime.compareTo(bTime);
       });
 
@@ -261,7 +293,7 @@ class _PredictionsContentState extends State<PredictionsContent> {
                         else
                           ...predictionsList.map((data) {
                             final timestamp =
-                                (data['timestamp'] as Timestamp).toDate();
+                                _parseTimestamp(data['timestamp']);
                             // Normalize minutes to 00 or 30
                             final normalizedMinutes =
                                 timestamp.minute < 30 ? "00" : "30";
