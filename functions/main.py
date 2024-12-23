@@ -147,10 +147,7 @@ def store_predictions(predictions_data: dict):
             processed_predictions = []
             for pred in prediction["predictions"]:
                 pred_timestamp = datetime.fromisoformat(pred["timestamp"])
-                processed_predictions.append({
-                    **pred,
-                    "timestamp": pred_timestamp
-                })
+                processed_predictions.append({**pred, "timestamp": pred_timestamp})
 
             # Store predictions with datetime objects
             predictions_ref.document(day).set(
@@ -176,8 +173,8 @@ def scheduled_run_dbos_predictions(event: scheduler_fn.ScheduledEvent):
             logging.error("No historical data available")
             return
 
-        # Prepare request to DBOS endpoint
-        dbos_url = os.getenv("DBOS_PREDICT_URL")
+        # Get URL from function config instead of env
+        dbos_url = "https://proschu2-badi.cloud.dbos.dev/predict"
         if not dbos_url:
             logging.error("DBOS_PREDICT_URL not configured")
             return
