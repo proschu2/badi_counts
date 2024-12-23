@@ -22,7 +22,7 @@ class _HomePageState extends State<HomePage> {
   int _freePlaces = 0;
   int _totalCapacity = 0;
   int _currentUsage = 0;
-  double _occupancyPercentage = 0;
+  double _availabilityPercentage = 0; // renamed from _occupancyPercentage
   String _status = 'Updating...';
   bool _isPoolOpen = false;
   String _timeRemaining = '';
@@ -86,13 +86,13 @@ class _HomePageState extends State<HomePage> {
 
       if (cityPool != null) {
         setState(() {
-          _isPoolOpen = true; // Set pool as open when we receive data
+          _isPoolOpen = true;
           _freePlaces = int.parse(cityPool['freespace'].toString());
           _totalCapacity = int.parse(cityPool['maxspace'].toString());
           _currentUsage = int.parse(cityPool['currentfill'].toString());
-          // Calculate percentage based on current usage
-          _occupancyPercentage = _totalCapacity > 0
-              ? (_currentUsage / _totalCapacity).clamp(0.0, 1.0) * 100
+          // Calculate availability percentage
+          _availabilityPercentage = _totalCapacity > 0
+              ? (_freePlaces / _totalCapacity).clamp(0.0, 1.0) * 100
               : 0.0;
           _updateStatus();
         });
@@ -103,12 +103,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _updateStatus() {
-    if (_freePlaces > 50) {
-      _status = 'Plenty of space available';
-    } else if (_freePlaces > 20) {
-      _status = 'Moderate capacity';
+    // Updated thresholds based on percentage rather than absolute numbers
+    if (_availabilityPercentage >= 40) {
+      _status = 'High availability';
+    } else if (_availabilityPercentage >= 20) {
+      _status = 'Moderate availability';
     } else {
-      _status = 'Almost full';
+      _status = 'Low availability';
     }
   }
 
@@ -151,11 +152,8 @@ class _HomePageState extends State<HomePage> {
 
   Color _getCapacityColor() {
     if (!_isPoolOpen) return Colors.grey.withOpacity(0.2);
-    // Use occupancy percentage instead of raw numbers
-    final freeSpacePercentage =
-        (_freePlaces / _totalCapacity * 100).clamp(0.0, 100.0);
-    if (freeSpacePercentage >= 66) return Colors.green.withOpacity(0.2);
-    if (freeSpacePercentage >= 33) return Colors.yellow.withOpacity(0.2);
+    if (_availabilityPercentage >= 40) return Colors.green.withOpacity(0.2);
+    if (_availabilityPercentage >= 20) return Colors.yellow.withOpacity(0.2);
     return Colors.red.withOpacity(0.7);
   }
 
@@ -164,14 +162,14 @@ class _HomePageState extends State<HomePage> {
     final isLargeScreen = screenWidth > 600;
     final barWidth = isLargeScreen ? 600.0 : screenWidth;
 
-    // Get colors for gradient based on percentage
+    // Get colors for gradient based on availability percentage
     List<Color> getProgressColors() {
-      if (_occupancyPercentage >= 75) {
-        return [Colors.red.shade300, Colors.red];
-      } else if (_occupancyPercentage >= 50) {
+      if (_availabilityPercentage >= 75) {
+        return [Colors.green.shade300, Colors.green];
+      } else if (_availabilityPercentage >= 50) {
         return [Colors.yellow.shade300, Colors.yellow];
       } else {
-        return [Colors.green.shade300, Colors.green];
+        return [Colors.red.shade300, Colors.red];
       }
     }
 
@@ -189,7 +187,7 @@ class _HomePageState extends State<HomePage> {
           ),
           child: FractionallySizedBox(
             alignment: Alignment.centerLeft,
-            widthFactor: (_occupancyPercentage / 100).clamp(0.0, 1.0),
+            widthFactor: (_availabilityPercentage / 100).clamp(0.0, 1.0),
             child: Container(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -230,7 +228,7 @@ class _HomePageState extends State<HomePage> {
             width: itemWidth,
             height: itemHeight,
             child: StatBox(
-              title: 'Current Usage',
+              title: 'Currently Inside',
               value: _currentUsage.toString(),
             ),
           ),
@@ -238,8 +236,8 @@ class _HomePageState extends State<HomePage> {
             width: itemWidth,
             height: itemHeight,
             child: StatBox(
-              title: 'Occupancy',
-              value: '${_occupancyPercentage.round()}%',
+              title: 'Availability',
+              value: '${_availabilityPercentage.round()}%',
             ),
           ),
         ],
@@ -313,7 +311,8 @@ class _HomePageState extends State<HomePage> {
                 onPressed: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const PredictionsPage()),
+                    MaterialPageRoute(
+                        builder: (context) => const PredictionsPage()),
                   );
                 },
                 tooltip: 'View Predictions',

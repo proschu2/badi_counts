@@ -135,7 +135,7 @@ class _PredictionsContentState extends State<PredictionsContent> {
         appBar: AppBar(
           backgroundColor: Colors.transparent,
           elevation: 0,
-          title: const Text('Occupancy Predictions'),
+          title: const Text('Availability Predictions'),
           actions: [
             Padding(
               padding: const EdgeInsets.only(right: 16.0),
