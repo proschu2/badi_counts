@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
-from typing import List, Dict, Optional
+from typing import Any, List, Dict, Optional
 from enum import Enum
 from prophet import Prophet
 import pandas as pd
@@ -64,7 +64,7 @@ class PredictionResponse(BaseModel):
 
 
 @dbos_app.step()
-def process_and_predict(data: PredictionInput) -> Dict[str, DayPrediction]:
+def process_and_predict(data: PredictionInput) -> Dict[str, Any]:
     """
     DBOS step to process data and run Prophet forecasting
     """
@@ -291,14 +291,14 @@ def process_and_predict(data: PredictionInput) -> Dict[str, DayPrediction]:
             last_updated=datetime.now(ZoneInfo("Europe/Zurich")),
             predictions=[DetailedPrediction(**pred) for pred in data["predictions"]],
             periods=period_predictions,
-        )
+        ).model_dump(exclude_none=True, exclude_unset=True)
 
     return formatted_predictions
 
 
 @dbos_app.workflow()
 @app.post("/predict")
-async def forecast_prophet(data: PredictionInput) -> Dict[str, DayPrediction]:
+async def forecast_prophet(data: PredictionInput) -> Dict[str, Any]:
     """
     Combined DBOS workflow and FastAPI endpoint for Prophet forecasting
     """
