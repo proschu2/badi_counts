@@ -210,10 +210,45 @@ class _PredictionsContentState extends State<PredictionsContent> {
                             children: periods.map((period) {
                               final periodsData = data['periods'] as Map<String, dynamic>?;
                               final periodData = periodsData?[period] as Map<String, dynamic>?;
-                              final percentage = periodData?['predicted_freespace_percentage'] ?? 0.0;
-                              return _buildPeriodRow(period, percentage,
-                                  data['predictions'] ?? []);
-                            }).toList(),
+                              
+                              // Skip period if no data or already passed
+                              if (periodData == null || 
+                                  (doc.id == DateFormat('yyyy-MM-dd').format(DateTime.now()) && 
+                                   _isPastPeriod(period, DateTime.now()))) {
+                                return const SizedBox.shrink();
+                              }
+
+                              final percentage = periodData['predicted_freespace_percentage'] ?? 0.0;
+                              final predictions = data['predictions'] ?? [];
+                              
+                              // Check if there are any predictions for this period
+                              final hasPredictions = predictions is List && 
+                                predictions.any((p) {
+                                  try {
+                                    final timestamp = _parseTimestamp(p['timestamp']);
+                                    final hour = timestamp.hour;
+                                    final periodHours = {
+                                      'early_morning': [6, 7, 8],
+                                      'late_morning': [9, 10],
+                                      'lunch': [11, 12],
+                                      'afternoon': [13, 14, 15],
+                                      'after_work': [16, 17, 18],
+                                      'evening': [19, 20, 21],
+                                    };
+                                    return periodHours[period]?.contains(hour) ?? false;
+                                  } catch (e) {
+                                    return false;
+                                  }
+                                });
+
+                              // Only show period if it has predictions
+                              if (!hasPredictions) {
+                                return const SizedBox.shrink();
+                              }
+
+                              return _buildPeriodRow(period, percentage, predictions);
+                            }).toList()
+                            ..removeWhere((widget) => widget is SizedBox && widget.width == null),
                           ),
                         ),
                       ],
@@ -228,13 +263,18 @@ class _PredictionsContentState extends State<PredictionsContent> {
     );
   }
 
-  Widget _buildPeriodRow(
-      String period, double percentage, dynamic predictions) {
+  Widget _buildPeriodRow(String period, double percentage, dynamic predictions) {
+    // Safely handle null predictions
+    if (predictions == null) {
+      return const SizedBox.shrink();
+    }
+
     final now = DateTime.now();
     final today = DateFormat('yyyy-MM-dd').format(now);
-    final rowDate = predictions.isNotEmpty
-        ? DateFormat('yyyy-MM-dd')
-            .format(_parseTimestamp(predictions[0]['timestamp']))
+    
+    // Safely access first prediction timestamp
+    final rowDate = predictions is List && predictions.isNotEmpty && predictions[0] != null
+        ? DateFormat('yyyy-MM-dd').format(_parseTimestamp(predictions[0]['timestamp']))
         : '';
 
     // Only filter past periods if this row is for today
@@ -242,30 +282,53 @@ class _PredictionsContentState extends State<PredictionsContent> {
       return const SizedBox.shrink();
     }
 
-    // Cast and filter predictions for this period
-    final predictionsList = ((predictions as List<dynamic>?)
-            ?.map((p) => p as Map<String, dynamic>)
-            .where((prediction) {
-          final timestamp = _parseTimestamp(prediction['timestamp']);
-          final hour = timestamp.hour;
+    // Safely cast and filter predictions
+    final predictionsList = ((predictions is List)
+        ? predictions.where((p) => p != null).map((p) {
+            try {
+              final pred = p as Map<String, dynamic>;
+              if (pred['timestamp'] == null) return null;
+              final timestamp = _parseTimestamp(pred['timestamp']);
+              if (pred['predicted_freespace_percentage'] == null ||
+                  pred['lower_bound'] == null ||
+                  pred['upper_bound'] == null) {
+                return null;
+              }
+              return pred;
+            } catch (e) {
+              print('Error processing prediction: $e');
+              return null;
+            }
+          }).whereType<Map<String, dynamic>>()
+        : <Map<String, dynamic>>[]).where((prediction) {
+      try {
+        final timestamp = _parseTimestamp(prediction['timestamp']);
+        final hour = timestamp.hour;
 
-          // Define period time ranges
-          final Map<String, List<int>> periodHours = {
-            'early_morning': [6, 7, 8],
-            'late_morning': [9, 10],
-            'lunch': [11, 12],
-            'afternoon': [13, 14, 15],
-            'after_work': [16, 17, 18],
-            'evening': [19, 20, 21],
-          };
+        final Map<String, List<int>> periodHours = {
+          'early_morning': [6, 7, 8],
+          'late_morning': [9, 10],
+          'lunch': [11, 12],
+          'afternoon': [13, 14, 15],
+          'after_work': [16, 17, 18],
+          'evening': [19, 20, 21],
+        };
 
-          return periodHours[period]?.contains(hour) ?? false;
-        }).toList() ??
-        [])
+        return periodHours[period]?.contains(hour) ?? false;
+      } catch (e) {
+        print('Error filtering prediction: $e');
+        return false;
+      }
+    }).toList()
       ..sort((a, b) {
-        final aTime = _parseTimestamp(a['timestamp']);
-        final bTime = _parseTimestamp(b['timestamp']);
-        return aTime.compareTo(bTime);
+        try {
+          final aTime = _parseTimestamp(a['timestamp']);
+          final bTime = _parseTimestamp(b['timestamp']);
+          return aTime.compareTo(bTime);
+        } catch (e) {
+          print('Error sorting predictions: $e');
+          return 0;
+        }
       });
 
     return Padding(
