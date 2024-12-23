@@ -1,0 +1,16 @@
+name: badi
+language: python
+runtimeConfig:
+  start:
+    - fastapi run badi/functions.py
+database:
+  hostname: userdb-49d0e88f-809d-4a72-ba54-993f88479acd.cvc4gmaa6qm9.us-east-1.rds.amazonaws.com
+  port: 5432
+  username: dbos_user
+  password: spitfire157
+  migrate:
+    - alembic upgrade head
+  local_suffix: true
+telemetry:
+  logs:
+    logLevel: INFO
