@@ -4,6 +4,7 @@ from firebase_admin import firestore, credentials
 from datetime import datetime
 import firebase_admin
 from firebase_functions import scheduler_fn
+from google.cloud.firestore import SERVER_TIMESTAMP
 import asyncio
 import logging
 import os
@@ -129,7 +130,7 @@ def fetch_historical_data():
 
 
 def store_predictions(predictions_data: dict):
-    """Store predictions in Firestore"""
+    """Store predictions in Firestore with proper timestamp handling"""
     try:
         predictions_ref = (
             db.collection("freespace_data")
@@ -138,13 +139,24 @@ def store_predictions(predictions_data: dict):
         )
 
         for day, prediction in predictions_data.items():
-            # Parse the last_updated string to datetime with timezone
+            # Convert last_updated to datetime
             last_updated = datetime.fromisoformat(prediction["last_updated"])
-            # Store predictions
+            last_updated_ts = SERVER_TIMESTAMP if last_updated is None else last_updated
+
+            # Convert all prediction timestamps to datetime objects
+            processed_predictions = []
+            for pred in prediction["predictions"]:
+                pred_timestamp = datetime.fromisoformat(pred["timestamp"])
+                processed_predictions.append({
+                    **pred,
+                    "timestamp": pred_timestamp
+                })
+
+            # Store predictions with datetime objects
             predictions_ref.document(day).set(
                 {
-                    "last_updated": last_updated,
-                    "predictions": prediction["predictions"],
+                    "last_updated": last_updated_ts,
+                    "predictions": processed_predictions,
                     "periods": prediction["periods"],
                 }
             )
