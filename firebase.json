@@ -29,13 +29,6 @@
   "config": {
     "flutter": {
       "platforms": {
-        "android": {
-          "default": {
-            "projectId": "badi-counts-zh",
-            "appId": "1:1097937205336:android:f3a66d8338db9f2e42b22d",
-            "fileOutput": "android/app/google-services.json"
-          }
-        },
         "dart": {
           "lib/firebase_options.dart": {
             "projectId": "badi-counts-zh",
