@@ -1,6 +1,6 @@
 import websockets
 import json
-from firebase_admin import firestore, credentials
+from firebase_admin import firestore, initialize_app
 from datetime import datetime
 import firebase_admin
 from firebase_functions import scheduler_fn
@@ -8,20 +8,14 @@ from google.cloud.firestore import SERVER_TIMESTAMP
 import asyncio
 import logging
 import os
-from dotenv import load_dotenv
 from zoneinfo import ZoneInfo
 import time
 import requests
 import pandas as pd
 
-# Initialize Firebase
+# Simplify Firebase initialization
 if not firebase_admin._apps:
-    load_dotenv()
-    if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-        cred = credentials.Certificate(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
-        firebase_admin.initialize_app(cred)
-    else:
-        firebase_admin.initialize_app()
+    initialize_app()
 
 db = firestore.client()
 logging.basicConfig(level=logging.INFO)
@@ -163,7 +157,9 @@ def store_predictions(predictions_data: dict):
         logging.error(f"Error storing predictions: {e}")
 
 
-@scheduler_fn.on_schedule(schedule="every 2 hours from 06:00 to 22:00")
+@scheduler_fn.on_schedule(
+    schedule="every 2 hours from 06:00 to 22:00", timezone="Europe/Zurich"
+)
 def scheduled_run_dbos_predictions(event: scheduler_fn.ScheduledEvent):
     """Fetch data and send to DBOS endpoint for predictions"""
     try:
@@ -173,8 +169,7 @@ def scheduled_run_dbos_predictions(event: scheduler_fn.ScheduledEvent):
             logging.error("No historical data available")
             return
 
-        # Get URL from function config instead of env
-        dbos_url = "https://proschu2-badi.cloud.dbos.dev/predict"
+        dbos_url = os.getenv("DBOS_PREDICT_URL")
         if not dbos_url:
             logging.error("DBOS_PREDICT_URL not configured")
             return
