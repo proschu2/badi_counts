@@ -228,7 +228,7 @@ class _HomePageState extends State<HomePage> {
             width: itemWidth,
             height: itemHeight,
             child: StatBox(
-              title: 'Currently Inside',
+              title: 'Current Usage',
               value: _currentUsage.toString(),
             ),
           ),
