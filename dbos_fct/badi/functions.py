@@ -110,7 +110,7 @@ def process_and_predict(data: PredictionInput) -> Dict[str, Any]:
         daily_seasonality=True,
         weekly_seasonality=False,
         yearly_seasonality=False,
-        changepoint_prior_scale=0.05,
+        changepoint_prior_scale=0.005,  # Reduced from 0.05 for smoother predictions
         seasonality_mode="additive",
         seasonality_prior_scale=5.0,
         holidays_prior_scale=0.1,
