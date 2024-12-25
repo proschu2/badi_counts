@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'dart:async'; // Add this import for Timer
 import 'package:intl/intl.dart';
 import 'predictions_page.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -17,6 +19,10 @@ class _HomePageState extends State<HomePage> {
   bool _isConnected = false;
   int _reconnectAttempts = 0;
   static const int maxReconnectAttempts = 5;
+  static const String _hasSeenWishesKey = 'has_seen_christmas_wishes';
+  final _remoteConfig = FirebaseRemoteConfig.instance;
+  static const String _showPopupKey = 'show_christmas_popup';
+  Timer? _configCheckTimer;
 
   // Pool data
   int _freePlaces = 0;
@@ -30,10 +36,139 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _initializeRemoteConfig();
     _connectWebSocket();
     _updateTimeRemaining();
     // Update time every second
     Timer.periodic(const Duration(seconds: 1), (_) => _updateTimeRemaining());
+
+    // Add periodic config check every 5 minutes
+    _configCheckTimer = Timer.periodic(const Duration(minutes: 5), (_) {
+      _checkAndUpdateConfig();
+    });
+  }
+
+  Future<void> _initializeRemoteConfig() async {
+    try {
+      debugPrint('Initializing Remote Config...');
+      await _remoteConfig.setConfigSettings(RemoteConfigSettings(
+        fetchTimeout: const Duration(minutes: 1),
+        minimumFetchInterval: const Duration(hours: 1),
+      ));
+      debugPrint('Config settings set successfully');
+
+      await _remoteConfig.setDefaults({
+        _showPopupKey: false,
+      });
+      debugPrint('Defaults set: show_popup = false');
+
+      final fetchStatus = await _remoteConfig.fetchAndActivate();
+      debugPrint('Fetch and activate completed. Success: $fetchStatus');
+
+      final showPopup = _remoteConfig.getBool(_showPopupKey);
+      debugPrint('Remote config value for show_popup: $showPopup');
+
+      if (showPopup) {
+        debugPrint('Showing Christmas popup based on remote config');
+        _showChristmasWishesIfNeeded();
+      } else {
+        debugPrint('Popup disabled by remote config');
+      }
+    } catch (e, stackTrace) {
+      debugPrint('Failed to initialize remote config: $e');
+      debugPrint('Stack trace: $stackTrace');
+    }
+  }
+
+  Future<void> _checkAndUpdateConfig() async {
+    try {
+      debugPrint('Checking for config updates...');
+      final updated = await _remoteConfig.fetchAndActivate();
+      final showPopup = _remoteConfig.getBool(_showPopupKey);
+      debugPrint('Config update status: $updated, show_popup: $showPopup');
+
+      if (updated && showPopup) {
+        debugPrint('Config updated and popup enabled, checking if should show');
+        _showChristmasWishesIfNeeded();
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch remote config: $e');
+    }
+  }
+
+  Future<void> _showChristmasWishesIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasSeenWishes = prefs.getBool(_hasSeenWishesKey) ?? false;
+    debugPrint('Has user seen wishes before? $hasSeenWishes');
+
+    if (!hasSeenWishes) {
+      debugPrint('User has not seen wishes, showing popup');
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _showChristmasWishes();
+      });
+      await prefs.setBool(_hasSeenWishesKey, true);
+      debugPrint('Marked wishes as seen in preferences');
+    } else {
+      debugPrint('User has already seen wishes, skipping popup');
+    }
+  }
+
+  void _showChristmasWishes() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFF1E3C72), Color(0xFF2A5298)],
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.favorite,
+                  color: Colors.red,
+                  size: 48,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Buon Natale Pupina!',
+                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Un piccolo aiuto per decidere quando andare a nuotare\n❤️ Spero ti sarà utile! ❤️',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        color: Colors.white,
+                      ),
+                ),
+                const SizedBox(height: 24),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text(
+                    'Ti amo tanto',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   void _connectWebSocket() {
@@ -391,6 +526,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
+    _configCheckTimer?.cancel();
     _channel?.sink.close();
     super.dispose();
   }

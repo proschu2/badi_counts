@@ -40,6 +40,8 @@ dependencies:
   fl_chart: ^0.70.0 # Changed from ^0.60.0 to ^0.55.2 to fix MediaQuery.boldTextOverride error
   shared_preferences: ^2.3.4
   web_socket_channel: ^3.0.1
+  firebase_remote_config: ^5.2.0
+  firebase_analytics: ^11.3.6
 
 dev_dependencies:
   flutter_test:

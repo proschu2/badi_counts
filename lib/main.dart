@@ -7,19 +7,24 @@ import 'package:fl_chart/fl_chart.dart'; // Add this import
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'home_page.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 
 void main() async {
-  WidgetsFlutterBinding
-      .ensureInitialized(); // Ensure Flutter framework is initialized
+  WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(
-    options:
-        DefaultFirebaseOptions.currentPlatform, // Use the generated options
+    options: DefaultFirebaseOptions.currentPlatform,
   );
-  runApp(const MyApp());
+
+  FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
+  runApp(MyApp(analytics: analytics));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final FirebaseAnalytics analytics;
+
+  const MyApp({super.key, required this.analytics});
 
   @override
   Widget build(BuildContext context) {
@@ -57,6 +62,9 @@ class MyApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF1E3C72),
       ),
       home: const HomePage(),
+      navigatorObservers: [
+        FirebaseAnalyticsObserver(analytics: analytics),
+      ],
     );
   }
 }
