@@ -228,7 +228,7 @@ def process_and_predict(
                 raise HTTPException(status_code=500, detail="Model history not found")
             history = history.filter(df.columns)
             updated_df = pd.concat([history, df], ignore_index=True).drop_duplicates()
-            model.fit(updated_df)
+            model = fit_model(updated_df)
         except (AssertionError, HTTPException):
             model = fit_model(df)
     else:
