@@ -73,7 +73,13 @@ def process_and_predict(data: PredictionInput) -> Dict[str, Any]:
 
     # Create DataFrame for Prophet with all timestamps
     base_df = pd.DataFrame(
-        {"ds": pd.to_datetime(data.timestamps).tz_localize(None), "y": data.values}
+        {
+            "ds": [
+                ts.astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+                for ts in data.timestamps
+            ],
+            "y": data.values,
+        }
     )
 
     # Get the actual latest timestamp before any processing
