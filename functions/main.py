@@ -91,7 +91,7 @@ def fetch_freespace():
 
 
 @scheduler_fn.on_schedule(
-    schedule="every 10 minutes from 06:00 to 22:00", timezone="Europe/Zurich"
+    schedule="every 30 minutes from 06:00 to 22:00", timezone="Europe/Zurich"
 )
 def scheduled_fetch_freespace(event: scheduler_fn.ScheduledEvent):
     freespace = fetch_freespace()
@@ -99,14 +99,38 @@ def scheduled_fetch_freespace(event: scheduler_fn.ScheduledEvent):
 
 
 # Prediction related functions
-def fetch_historical_data():
-    """Fetch historical data from Firestore"""
+def fetch_historical_data(full_history: bool = False) -> pd.DataFrame:
+    """
+    Fetch historical data from Firestore for prediction input.
+
+    Args:
+        full_history: If True, fetches all historical data. If False, fetches only
+                     today's data (since midnight).
+
+    Returns:
+        DataFrame with columns:
+            - ds: datetime with timezone (Europe/Zurich)
+            - y: freespace percentage values (0-100)
+
+    If an error occurs or no data is found, returns an empty DataFrame.
+    """
     try:
+        # Get reference to collection
         collection_ref = (
             db.collection("freespace_data")
             .document("Hallenbad_City")
             .collection("historical_data")
         )
+
+        # Apply time filter if not requesting full history
+        if not full_history:
+            # Get start of today
+            today_start = datetime.now(ZoneInfo("Europe/Zurich")).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            collection_ref = collection_ref.where("timestamp", ">=", today_start)
+
+        # Get documents
         docs = collection_ref.stream()
         data = []
         for doc in docs:
@@ -123,8 +147,26 @@ def fetch_historical_data():
         return pd.DataFrame()
 
 
-def store_predictions(predictions_data: dict):
-    """Store predictions in Firestore with proper timestamp handling"""
+def store_predictions(predictions_response: dict):
+    """
+    Store predictions in Firestore with proper timestamp handling.
+
+    Args:
+        predictions_response: Dictionary containing prediction response from DBOS API:
+            {
+                "message": str,
+                "predictions": {
+                    "YYYY-MM-DD": {
+                        "last_updated": datetime string,
+                        "predictions": List[DetailedPrediction],
+                        "periods": {
+                            "early_morning": {"predicted_freespace_percentage": float, ...},
+                            ...
+                        }
+                    }
+                }
+            }
+    """
     try:
         predictions_ref = (
             db.collection("freespace_data")
@@ -132,6 +174,8 @@ def store_predictions(predictions_data: dict):
             .collection("predictions")
         )
 
+        # Extract predictions from the response
+        predictions_data = predictions_response.get("predictions", {})
         for day, prediction in predictions_data.items():
             # Convert last_updated to datetime
             last_updated = datetime.fromisoformat(prediction["last_updated"])
@@ -158,20 +202,25 @@ def store_predictions(predictions_data: dict):
 
 
 @scheduler_fn.on_schedule(
-    schedule="every 2 hours from 06:00 to 22:00", timezone="Europe/Zurich"
+    schedule="every 2 hours from 07:01 to 22:00", timezone="Europe/Zurich"
 )
 def scheduled_run_dbos_predictions(event: scheduler_fn.ScheduledEvent):
-    """Fetch data and send to DBOS endpoint for predictions"""
+    """
+    Scheduled function to fetch recent historical data and get predictions from DBOS.
+
+    Fetches today's historical data from Firestore, sends it to the DBOS
+    prediction endpoint for incremental model updates, and stores the returned predictions.
+    """
     try:
-        # Get historical data
-        df = fetch_historical_data()
+        # Get recent historical data only
+        df = fetch_historical_data(full_history=False)
         if df.empty:
             logging.error("No historical data available")
             return
 
-        dbos_url = os.getenv("DBOS_PREDICT_URL")
+        dbos_url = os.getenv("DBOS_URL")
         if not dbos_url:
-            logging.error("DBOS_PREDICT_URL not configured")
+            logging.error("DBOS_URL not configured")
             return
 
         payload = {
@@ -181,16 +230,59 @@ def scheduled_run_dbos_predictions(event: scheduler_fn.ScheduledEvent):
         }
 
         # Send request to DBOS endpoint
-        response = requests.post(dbos_url, json=payload)
+        response = requests.post(dbos_url + "/predict", json=payload)
         response.raise_for_status()
-        predictions = response.json()
+        prediction_response = response.json()
 
         # Store predictions in Firestore
-        store_predictions(predictions)
+        store_predictions(prediction_response)
         logging.info("DBOS predictions completed and stored")
 
     except Exception as e:
         logging.error(f"Error in DBOS prediction workflow: {e}")
+
+
+@scheduler_fn.on_schedule(
+    schedule="0 4 * * *",
+    timezone="Europe/Zurich",  # Run at 4 AM daily
+)
+def scheduled_full_model_fit(event: scheduler_fn.ScheduledEvent):
+    """
+    Daily scheduled task to fit a full model using complete historical data.
+
+    Fetches all historical data and sends it to the DBOS full model training endpoint.
+    This ensures the model maintains long-term patterns while avoiding concept drift.
+    """
+    try:
+        # Get complete historical data
+        df = fetch_historical_data(full_history=True)
+        if df.empty:
+            logging.error("No historical data available")
+            return
+
+        dbos_url = os.getenv("DBOS_URL")
+        if not dbos_url:
+            logging.error("DBOS_URL not configured")
+            return
+
+        payload = {
+            "timestamps": [ts.isoformat() for ts in df["ds"]],
+            "values": df["y"].tolist(),
+            "days": 5,
+            "is_full_history": True,
+        }
+
+        # Send request to DBOS endpoint
+        response = requests.post(dbos_url + "/fit_full_model", json=payload)
+        response.raise_for_status()
+        prediction_response = response.json()
+
+        # Store predictions in Firestore
+        store_predictions(prediction_response)
+        logging.info("Full model training completed and new predictions stored")
+
+    except Exception as e:
+        logging.error(f"Error in full model training workflow: {e}")
 
 
 if __name__ == "__main__":
