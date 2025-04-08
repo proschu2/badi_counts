@@ -14,7 +14,7 @@ service cloud.firestore {
 
     match /{document=**} {
       allow read: if true;
-      allow write: if isServiceAccount() || isLocalDevelopment();
+      allow create, update, delete: if isServiceAccount() || isLocalDevelopment();
     }
   }
 }

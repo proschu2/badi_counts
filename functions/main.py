@@ -12,6 +12,7 @@ from zoneinfo import ZoneInfo
 import time
 import requests
 import pandas as pd
+from dateutil.relativedelta import relativedelta
 
 # Simplify Firebase initialization
 if not firebase_admin._apps:
@@ -283,6 +284,62 @@ def scheduled_full_model_fit(event: scheduler_fn.ScheduledEvent):
 
     except Exception as e:
         logging.error(f"Error in full model training workflow: {e}")
+
+
+@scheduler_fn.on_schedule(
+    schedule="0 1 * * 1",  # Run at 1 AM every Monday
+    timezone="Europe/Zurich",
+)
+def scheduled_cleanup_old_predictions(event: scheduler_fn.ScheduledEvent):
+    """
+    Weekly scheduled task to clean up old prediction data.
+    
+    Deletes prediction documents that have a last_updated timestamp older than one month.
+    This helps keep the database size manageable and removes outdated predictions.
+    """
+    try:
+        # Calculate cutoff date (1 month ago)
+        cutoff_date = datetime.now(ZoneInfo("Europe/Zurich")) - relativedelta(months=1)
+        logging.info(f"Cleaning up predictions older than: {cutoff_date.isoformat()}")
+        
+        # Get reference to predictions collection
+        predictions_ref = (
+            db.collection("freespace_data")
+            .document("Hallenbad_City")
+            .collection("predictions")
+        )
+        
+        # Get all prediction documents
+        docs = predictions_ref.stream()
+        deleted_count = 0
+        
+        for doc in docs:
+            doc_data = doc.to_dict()
+            # Check if last_updated exists and is older than cutoff date
+            if "last_updated" in doc_data:
+                last_updated = doc_data["last_updated"]
+                
+                # Convert to datetime if it's a timestamp
+                if not isinstance(last_updated, datetime):
+                    try:
+                        last_updated = datetime.fromisoformat(str(last_updated))
+                    except (ValueError, TypeError):
+                        logging.warning(f"Invalid timestamp format in document: {doc.id}")
+                        continue
+                
+                # Add timezone info if missing
+                if last_updated.tzinfo is None:
+                    last_updated = last_updated.replace(tzinfo=ZoneInfo("Europe/Zurich"))
+                
+                # Delete if older than cutoff date
+                if last_updated < cutoff_date:
+                    doc.reference.delete()
+                    deleted_count += 1
+        
+        logging.info(f"Deleted {deleted_count} outdated prediction documents")
+        
+    except Exception as e:
+        logging.error(f"Error cleaning up old predictions: {e}")
 
 
 if __name__ == "__main__":
